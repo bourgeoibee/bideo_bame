@@ -222,10 +222,16 @@ fn gravity(time: Res<Time>, mut player: Query<(&mut Transform, &mut Player)>) {
 }
 
 fn friction(mut player: Query<&mut Player>) {
-    let slow_down = 0.8;
+    let ground_resistance = 0.2;
+    let air_resistance = 0.1;
+
     let mut player = player.get_single_mut().expect("Player exists");
+    let velocity = player.velocity;
+
     if player.is_grounded {
-        player.velocity *= slow_down;
+        player.velocity -= velocity * ground_resistance;
+    } else {
+        player.velocity -= velocity * air_resistance;
     }
 }
 
