@@ -209,8 +209,8 @@ fn movement(
     }
 }
 
-fn gravity(time: Res<Time>, mut player: Query<(&mut Transform, &mut KinematicCharacterControllerOutput, &mut Player)>) {
-    let (mut transform, mut controller, mut player) = player.get_single_mut().expect("Player exists");
+fn gravity(time: Res<Time>, mut player: Query<(&mut Transform, &mut Player)>) {
+    let (mut transform, mut player) = player.get_single_mut().expect("Player exists");
     if !player.is_grounded {
         player.velocity.y -= GRAVITY * time.delta_seconds();
     }
