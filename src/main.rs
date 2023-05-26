@@ -3,22 +3,27 @@ use bevy::{
     prelude::*,
     window::{CursorGrabMode, PrimaryWindow},
 };
-use bevy_aabb_instancing::VertexPullingRenderPlugin;
+use bevy_aabb_instancing::{
+    Cuboid, CuboidMaterial, CuboidMaterialId, CuboidMaterialMap, Cuboids,
+    VertexPullingRenderPlugin, COLOR_MODE_SCALAR_HUE,
+};
 use bevy_rapier3d::prelude::*;
 
 const TAU: f32 = 6.283185307179586476925286766559;
 const GRAVITY: f32 = 3.;
 const PLAYER_WIDTH: f32 = 0.2;
 const PLAYER_HEIGHT: f32 = 1.6;
+const WORLD_SIZE: i32 = 10;
 
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
         .add_plugin(RapierPhysicsPlugin::<NoUserData>::default())
         .add_plugin(RapierDebugRenderPlugin::default())
-        .add_plugin(VertexPullingRenderPlugin::default())
+        .add_plugin(VertexPullingRenderPlugin { outlines: true })
         .init_resource::<Settings>()
         .add_startup_system(setup)
+        .add_startup_system(generate_world)
         .add_system(grab_cursor)
         .add_system(camera_movement)
         .add_system(camera_follow)
@@ -39,6 +44,11 @@ struct Player {
     velocity: Vec3,
 }
 
+enum Block {
+    Dirt,
+    Air,
+}
+
 #[derive(Resource)]
 struct Settings {
     sensitivity: f32,
@@ -56,25 +66,6 @@ pub fn setup(
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut primary_window: Query<&mut Window, With<PrimaryWindow>>,
 ) {
-    // Floor
-    commands.spawn((
-        PbrBundle {
-            mesh: meshes.add(shape::Plane::from_size(100.0).into()),
-            material: materials.add(Color::rgb(0.3, 0.5, 0.3).into()),
-            ..default()
-        },
-        Collider::cuboid(50.0, 0.1, 50.0),
-    ));
-    // Box
-    commands.spawn((
-        PbrBundle {
-            mesh: meshes.add(shape::Cube::new(1.0).into()),
-            material: materials.add(Color::rgb(0.9, 0.1, 0.2).into()),
-            transform: Transform::from_xyz(1.0, 0.5, 1.0),
-            ..default()
-        },
-        Collider::cuboid(0.5, 0.5, 0.5),
-    ));
     // Lighting
     commands.spawn(PointLightBundle {
         point_light: PointLight {
@@ -110,6 +101,49 @@ pub fn setup(
         window.cursor.grab_mode = CursorGrabMode::Confined;
         window.cursor.visible = false;
     }
+}
+
+fn generate_world(
+    mut commands: Commands,
+    meshes: ResMut<Assets<Mesh>>,
+    mut material_map: ResMut<CuboidMaterialMap>,
+) {
+    let material_id = material_map.push(CuboidMaterial {
+        color_mode: COLOR_MODE_SCALAR_HUE,
+        ..default()
+    });
+    let world_size = WORLD_SIZE as usize;
+    let mut world: Vec<Block> = Vec::with_capacity(world_size * world_size * world_size);
+    let mut instances = vec![];
+    for y in -WORLD_SIZE..0 {
+        for x in -WORLD_SIZE..WORLD_SIZE {
+            for z in -WORLD_SIZE..WORLD_SIZE {
+                let block = if y > 0 { Block::Air } else { Block::Dirt };
+                world.push(block);
+                // blocks.push((
+                //     MaterialMeshBundle {
+                //         visibility: Visibility::Visible,
+                //         transform: Transform::from_xyz(x as f32, y as f32, z as f32),
+                //         mesh: meshes.add(shape::Cube::new(1.0).into()),
+                //         material: materials.add(StandardMaterial::default()),
+                //         ..default()
+                //     },
+                //     Collider::cuboid(1., 1., 1.),
+                // ))
+                let min = Vec3::new(x as f32 - 1., y as f32 - 1., z as f32 - 1.);
+                let max = Vec3::new(x as f32, y as f32, z as f32);
+                let color = 0xFF0000FF;
+                let cuboid = Cuboid::new(min, max, color);
+                instances.push(cuboid);
+            }
+        }
+    }
+    // commands.spawn_batch(blocks);
+    let cuboids = Cuboids::new(instances);
+    let aabb = cuboids.aabb();
+    commands
+        .spawn(SpatialBundle::default())
+        .insert((cuboids, aabb, material_id));
 }
 
 fn grab_cursor(
